@@ -17,11 +17,12 @@ struct Queue {
 void Get_File(char *argv[], FILE *fp[], int file_count);
 void Read_File(struct Queue *q, FILE *fp);
 void Close_File(FILE *fp[], int file_count);
+void Tokenise(char *buf);
 void producer_consumer_func(int producer_count, int consumer_count, FILE *fp[], int file_count);
 struct Queue *create_queue();
 struct QNode *new_node(char *buf);
 void enqueue(struct Queue *q, char *buf);
-void dequeue(struct Queue *q);
+struct QNode *dequeue(struct Queue *q);
 void print_queue(struct Queue *q);
 
 int main(int argc, char *argv[])
@@ -79,6 +80,11 @@ void Close_File(FILE *fp[], int file_count)
     }
 }
 
+void Tokenise(char *buf)
+{
+    printf("BUF: %s\n", buf);
+}
+
 void producer_consumer_func(int producer_count, int consumer_count, FILE *fp[], int file_count)
 {
     struct Queue *key_q = create_queue();
@@ -102,7 +108,21 @@ void producer_consumer_func(int producer_count, int consumer_count, FILE *fp[], 
         }
         else // Consumer Threads
         {
-           while(prod_done_count < producer_count); 
+            struct QNode *temp;        
+
+            while(prod_done_count < producer_count || key_q->head != NULL) 
+            {
+#               pragma omp critical
+                {
+                    if(key_q->head != NULL) 
+                        temp = dequeue(key_q);
+                }
+                if(temp != NULL)
+                {
+                    Tokenise(temp->buf);
+                    free(temp);
+                }
+            }
         }
     }
 }
@@ -129,29 +149,34 @@ struct QNode *new_node(char *buf)
 void enqueue(struct Queue *q, char *buf)
 {
     struct QNode *temp = new_node(buf);
+
+#   pragma omp critical
     if(q->rear == NULL)
     {
         q->head = q->rear = temp;
-        return;
     }
-
-    q->rear->next = temp;
-    q->rear = temp;
+    else
+    {
+        q->rear->next = temp;
+        q->rear = temp;
+    }
 }
 
-void dequeue(struct Queue *q)
+struct QNode *dequeue(struct Queue *q)
 {
     if(q->head == NULL)
-            return;
+            return NULL;
 
     struct QNode *temp = q->head;
 
-    q->head = q->head->next;
+//#   pragma omp critical
+    {
+        q->head = q->head->next;
 
-    if(q->head == NULL)
-        q->rear = NULL;
-
-    free(temp);
+        if(q->head == NULL)
+            q->rear = NULL;
+    }
+    return temp;
 }
 
 void print_queue(struct Queue *q)
