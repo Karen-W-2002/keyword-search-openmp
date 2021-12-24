@@ -22,6 +22,7 @@ Gets input files and save to fp
 Reads the fp line by line and stores the lines into a queue using enqueue() function
 
 - **void Close_File(FILE \*fp[], int file_count)**
+
 Close fp files
 
 - **void Tokenise(char \*buf, int global_count[], char \*keywords[], int keyword_count)**
