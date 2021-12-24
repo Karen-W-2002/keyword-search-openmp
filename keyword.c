@@ -15,41 +15,50 @@ struct Queue {
     struct QNode *head, *rear;
 };
 
-void Get_File(char *argv[], FILE *fp[], int file_count);
+void Get_Keywords(char *argv[], char *keywords[], int keyword_count);
+void Get_File(char *argv[], FILE *fp[], int file_count, int keyword_count);
 void Read_File(struct Queue *q, FILE *fp);
 void Close_File(FILE *fp[], int file_count);
-void Tokenise(char *buf, int *global_count);
-void producer_consumer_func(int producer_count, int consumer_count, FILE *fp[], int file_count);
+void Tokenise(char *buf, int global_count[], char *keywords[], int keyword_count);
+void producer_consumer_func(int producer_count, int consumer_count, FILE *fp[], int file_count, char *keywords[], int keyword_count);
 struct Queue *create_queue();
 struct QNode *new_node(char *buf);
 void enqueue(struct Queue *q, char *buf);
 struct QNode *dequeue(struct Queue *q);
 void print_queue(struct Queue *q);
+void init_arr(int arr[], int n);
 
 int main(int argc, char *argv[])
 {
-    //struct Queue *q = create_queue();
     int producer_count = strtol(argv[1], NULL, 10);
     int consumer_count = strtol(argv[2], NULL, 10);
     int file_count = strtol(argv[1], NULL, 10);
-    //int keyword_count = strtol(argv[3], NULL, 10);
+    int keyword_count = strtol(argv[3], NULL, 10);
+    char *keywords[keyword_count];
     FILE *fp[file_count];
- 
-    // CHANGE add keyword_count to getfile for fp to be right
-    Get_File(argv, fp, file_count);
-    producer_consumer_func(producer_count, consumer_count, fp, file_count);
+
+    Get_Keywords(argv, keywords, keyword_count); 
+    Get_File(argv, fp, file_count, keyword_count);
+    producer_consumer_func(producer_count, consumer_count, fp, file_count, keywords, keyword_count);
     Close_File(fp, file_count);
     return 0;
 }
 
-void Get_File(char *argv[], FILE *fp[], int file_count)
+void Get_Keywords(char *argv[], char *keywords[], int keyword_count)
+{
+    int i;
+
+    for(i = 0; i < keyword_count; i++)
+        keywords[i] = argv[i+4];
+}
+
+void Get_File(char *argv[], FILE *fp[], int file_count, int keyword_count)
 {
     int i;
 
     for(i = 0; i < file_count; i++)
     {
-        // CHANGE i+3 after adding keywords
-        fp[i] = fopen(argv[i+3], "r");
+        fp[i] = fopen(argv[i+4+keyword_count+1], "r");
         if(fp[i] == NULL)
         {
             printf("Error on read\n");
@@ -68,8 +77,6 @@ void Read_File(struct Queue *q, FILE *fp)
         enqueue(q, line);
         line = malloc(BUFSIZE * sizeof(char));
     }
-
-    // maybe close file can be here instead of a function
 }
 
 void Close_File(FILE *fp[], int file_count)
@@ -82,33 +89,34 @@ void Close_File(FILE *fp[], int file_count)
     }
 }
 
-void Tokenise(char *buf, int *global_count)
+void Tokenise(char *buf, int global_count[], char *keywords[], int keyword_count)
 {
     char *token = strtok(buf, " ");
-    int local_count = 0;
+    int i;
 
     while(token != NULL)
     {
-        if(!strcmp(token, KEYWORD))
-            local_count++;
+        for(i = 0; i < keyword_count; i++)
+        {
+            if(!strcmp(token, keywords[i]))
+#               pragma omp critical
+                {
+                    global_count[i]++;
+                }
+        }
         token = strtok(NULL, " ");
-    }
-
-#   pragma omp critical
-    {
-        *global_count += local_count;
     }
 }
 
-void producer_consumer_func(int producer_count, int consumer_count, FILE *fp[], int file_count)
+void producer_consumer_func(int producer_count, int consumer_count, FILE *fp[], int file_count, char *keywords[], int keyword_count)
 {
     struct Queue *key_q = create_queue();
     int thread_count = producer_count + consumer_count;
     int prod_done_count = 0;
-    int global_count = 0; // CHANGE to array
-    // char *global_keyword[];
+    int global_count[keyword_count];
+    init_arr(global_count, keyword_count);
 
-#   pragma omp parallel num_threads(thread_count) default(none) shared(file_count, key_q, fp, producer_count, consumer_count, prod_done_count, global_count)
+#   pragma omp parallel num_threads(thread_count) default(none) shared(file_count, key_q, fp, producer_count, consumer_count, prod_done_count, global_count, keywords, keyword_count)
     {
         int i = 0;
         int my_rank = omp_get_thread_num();
@@ -117,7 +125,6 @@ void producer_consumer_func(int producer_count, int consumer_count, FILE *fp[], 
         {
             for(i = my_rank; i < file_count; i += producer_count)
             {
-                // writing to the q is critical tho?
                 Read_File(key_q, fp[i]);
             }
 #           pragma omp atomic
@@ -135,12 +142,12 @@ void producer_consumer_func(int producer_count, int consumer_count, FILE *fp[], 
                         temp = dequeue(key_q);
                 }
                 if(temp != NULL)
-                    Tokenise(temp->buf, &global_count);
+                    Tokenise(temp->buf, global_count, keywords, keyword_count);
                 
             }
 
             // CHANGE print!!!!
-            printf("global: %d\n", global_count);
+            printf("global: %d\n", global_count[1]);
         }
     }
 }
@@ -219,4 +226,14 @@ void print_queue(struct Queue *q)
     }
 
     printf("NULL\n");
+}
+
+void init_arr(int arr[], int n)
+{
+    int i;
+
+    for(i = 0; i < n; i++)
+    {
+        arr[i] = 0;
+    }
 }
