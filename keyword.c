@@ -4,6 +4,7 @@
 #include <omp.h>
 
 #define BUFSIZE 1024
+#define KEYWORD "Lorem"
 
 struct QNode {
     char *buf;
@@ -34,9 +35,7 @@ int main(int argc, char *argv[])
     FILE *fp[file_count];
  
     Get_File(argv, fp, file_count);
-    //Read_File(q, fp[0], file_count);
     producer_consumer_func(producer_count, consumer_count, fp, file_count);
-    //print_queue(q);
     Close_File(fp, file_count);
     return 0;
 }
@@ -82,7 +81,16 @@ void Close_File(FILE *fp[], int file_count)
 
 void Tokenise(char *buf)
 {
-    printf("BUF: %s\n", buf);
+    char *token = strtok(buf, " ");
+    int local_count = 0;
+
+    while(token != NULL)
+    {
+        if(!strcmp(token, KEYWORD))
+            local_count++;
+        token = strtok(NULL, " ");
+    }
+    printf("localcount: %d\n", local_count);
 }
 
 void producer_consumer_func(int producer_count, int consumer_count, FILE *fp[], int file_count)
@@ -120,7 +128,6 @@ void producer_consumer_func(int producer_count, int consumer_count, FILE *fp[], 
                 if(temp != NULL)
                 {
                     Tokenise(temp->buf);
-                    free(temp);
                 }
             }
         }
@@ -169,13 +176,11 @@ struct QNode *dequeue(struct Queue *q)
 
     struct QNode *temp = q->head;
 
-//#   pragma omp critical
-    {
-        q->head = q->head->next;
+    q->head = q->head->next;
 
-        if(q->head == NULL)
-            q->rear = NULL;
-    }
+    if(q->head == NULL)
+        q->rear = NULL;
+
     return temp;
 }
 
