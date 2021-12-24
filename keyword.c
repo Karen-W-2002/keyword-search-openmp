@@ -27,6 +27,7 @@ void enqueue(struct Queue *q, char *buf);
 struct QNode *dequeue(struct Queue *q);
 void print_queue(struct Queue *q);
 void init_arr(int arr[], int n);
+void print_keywords_count(int global_count[], char *keywords[], int keyword_count);
 
 int main(int argc, char *argv[])
 {
@@ -58,7 +59,7 @@ void Get_File(char *argv[], FILE *fp[], int file_count, int keyword_count)
 
     for(i = 0; i < file_count; i++)
     {
-        fp[i] = fopen(argv[i+4+keyword_count+1], "r");
+        fp[i] = fopen(argv[i+4+keyword_count], "r");
         if(fp[i] == NULL)
         {
             printf("Error on read\n");
@@ -99,10 +100,9 @@ void Tokenise(char *buf, int global_count[], char *keywords[], int keyword_count
         for(i = 0; i < keyword_count; i++)
         {
             if(!strcmp(token, keywords[i]))
-#               pragma omp critical
-                {
+            {
                     global_count[i]++;
-                }
+            }
         }
         token = strtok(NULL, " ");
     }
@@ -134,22 +134,36 @@ void producer_consumer_func(int producer_count, int consumer_count, FILE *fp[], 
         {
             struct QNode *temp;        
 
-            while(prod_done_count < producer_count || key_q->head != NULL) 
+            while(prod_done_count < producer_count)
             {
 #               pragma omp critical
                 {
-                    if(key_q->head != NULL) 
-                        temp = dequeue(key_q);
-                }
-                if(temp != NULL)
-                    Tokenise(temp->buf, global_count, keywords, keyword_count);
+                    temp = dequeue(key_q);
+                }  
                 
+                if(temp != NULL)
+#               pragma omp critical
+                {
+                    Tokenise(temp->buf, global_count, keywords, keyword_count);
+                }
             }
 
-            // CHANGE print!!!!
-            printf("global: %d\n", global_count[1]);
+            while(key_q->head != NULL) 
+            {
+#               pragma omp critical
+                {
+                    temp = dequeue(key_q);
+                }
+
+                if(temp != NULL)
+#               pragma omp critical
+                {
+                    Tokenise(temp->buf, global_count, keywords, keyword_count);
+                }
+            }
         }
     }
+    print_keywords_count(global_count, keywords, keyword_count);
 }
 
 /*
@@ -191,14 +205,12 @@ struct QNode *dequeue(struct Queue *q)
 {
     if(q->head == NULL)
             return NULL;
-
     struct QNode *temp = q->head;
 
     q->head = q->head->next;
 
     if(q->head == NULL)
         q->rear = NULL;
-
     return temp;
 }
 
@@ -235,5 +247,15 @@ void init_arr(int arr[], int n)
     for(i = 0; i < n; i++)
     {
         arr[i] = 0;
+    }
+}
+
+void print_keywords_count(int global_count[], char *keywords[], int keyword_count)
+{
+    int i;
+
+    for(i = 0; i < keyword_count; i++)
+    {
+        printf("%s: %d\n", keywords[i], global_count[i]);
     }
 }
